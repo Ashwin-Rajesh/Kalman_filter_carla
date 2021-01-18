@@ -30,6 +30,9 @@ import carla
 import numpy as np
 import time
 
+def deg_to_rad(val):
+    return val * np.pi / 180
+
 class agent:
     def __init__(self):
         self.client = carla.Client('localhost', 2000)
@@ -76,18 +79,33 @@ class agent:
         gnss_bp.set_attribute('sensor_tick', '0.1')
         gnss_tf = carla.Transform(carla.Location(0,0,0), carla.Rotation(0,0,0))
 
+        map_geo = self.world.get_map().transform_to_geolocation(carla.Location(0,0,0))
+        self.geo_centre = {'lat': deg_to_rad(map_geo.latitude), 'lon': deg_to_rad(map_geo.longitude), 'alt':map_geo.altitude}
+        self.geo_rad_y  = 6.357e6
+        self.geo_rad_x  = 6.378e6
+
         self.gnss = self.world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
         self.actor_list.append(self.gnss)
         self.gnss.listen(self.gnss_listen)
 
-        map_geo = self.world.get_map().transform_to_geolocation(carla.Location(0,0,0))
-        self.geo_centre = {'lat': map_geo.latitude, 'lon':map_geo.longitude, 'alt':map_geo.altitude}
-
-        self.geo_rad    = 6371.00
 
     def gnss_listen(self, data):
         self.gnss_data = data
 
+        lat = deg_to_rad(data.latitude)
+        lon = deg_to_rad(data.longitude)
+        alt = data.altitude 
+        
+        x = (lon - self.geo_centre['lon']) * np.cos(self.geo_centre['lat']) * self.geo_rad_x
+        y = (self.geo_centre['lat'] - lat) * self.geo_rad_y
+        z = alt - self.geo_centre['alt']
+
+        loc = self.vehicle.get_location()
+        
+        self.gnss_pos = [x, y, z]
+        self.real_pos = [loc.x, loc.y, loc.z]
+        self.gnss_err = [self.gnss_pos[i] - self.real_pos[i] for i in range(3)]
+        
     def __del__(self):
         for a in self.actor_list:
             a.destroy()
