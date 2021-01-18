@@ -63,11 +63,15 @@ class agent:
 
         self.imu = self.world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
         self.actor_list.append(self.imu)
-
+        self.imu_time = 0
+        self.imu_per  = 0.1
         self.imu.listen(self.imu_listen)
 
 
     def imu_listen(self, data):
+        if(data.timestamp - self.imu_time < self.imu_per):
+            return
+        self.imu_time = data.timestamp
         self.imu_data = data
 
     def spawn_gnss(self):
@@ -86,10 +90,15 @@ class agent:
 
         self.gnss = self.world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
         self.actor_list.append(self.gnss)
+        self.gnss_time = 0
+        self.gnss_per  = 0.1
         self.gnss.listen(self.gnss_listen)
 
 
     def gnss_listen(self, data):
+        if(data.timestamp - self.gnss_time < self.gnss_per):
+            return
+        self.gnss_time = data.timestamp
         self.gnss_data = data
 
         lat = deg_to_rad(data.latitude)
@@ -110,13 +119,3 @@ class agent:
         for a in self.actor_list:
             a.destroy()
             self.actor_list.remove(a)
-
-if __name__ == "__main__":
-    a = agent()
-
-    a.spawn_car()
-    a.spawn_gnss()
-
-    time.sleep(10)
-
-    del a
