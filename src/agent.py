@@ -52,7 +52,7 @@ class agent:
         print(" Spawning vehicle at location : %d, %d, %d"%(car_tf.location.x, car_tf.location.y, car_tf.location.z))
         print(" Vehicle model : %s %s"%(self.vehicle.type_id.split('.')[1], self.vehicle.type_id.split('.')[2]))
 
-    def spawn_imu(self):
+    def spawn_imu(self, period=0.1, length=500):
         if(self.vehicle == None):
             print(" Error : spawn car first")
             return
@@ -64,9 +64,10 @@ class agent:
         self.imu = self.world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
         self.actor_list.append(self.imu)
         self.imu_time = 0
-        self.imu_per  = 0.1
+        self.imu_per  = period
+        self.imu_len  = length
+        self.imu_list = []
         self.imu.listen(self.imu_listen)
-
 
     def imu_listen(self, data):
         if(data.timestamp - self.imu_time < self.imu_per):
@@ -74,7 +75,13 @@ class agent:
         self.imu_time = data.timestamp
         self.imu_data = data
 
-    def spawn_gnss(self):
+        if(len(self.imu_list) < self.imu_len):
+            self.imu_list.append(data)
+
+    def imu_reset(self):
+        self.imu_list = []
+
+    def spawn_gnss(self, period=0.1, length=500):
         if(self.vehicle == None):
             print(" Error : spawn car first")
             return
@@ -91,10 +98,12 @@ class agent:
         self.gnss = self.world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
         self.actor_list.append(self.gnss)
         self.gnss_time = 0
-        self.gnss_per  = 0.1
+        self.gnss_per  = period
+        self.gnss_len  = length
+        self.gnss_list = []
+        self.rpos_list = []
         self.gnss.listen(self.gnss_listen)
-
-
+        
     def gnss_listen(self, data):
         if(data.timestamp - self.gnss_time < self.gnss_per):
             return
@@ -114,6 +123,14 @@ class agent:
         self.gnss_pos = [x, y, z]
         self.real_pos = [loc.x, loc.y, loc.z]
         self.gnss_err = [self.gnss_pos[i] - self.real_pos[i] for i in range(3)]
+        
+        if(len(self.gnss_list) < self.gnss_len):
+            self.gnss_list.append((self.gnss_pos, data.timestamp))
+            self.rpos_list.append((self.real_pos, data.timestamp))
+
+    def gnss_reset(self):
+        self.gnss_list = []
+        self.rpos_list = []
         
     def __del__(self):
         for a in self.actor_list:
