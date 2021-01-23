@@ -52,13 +52,19 @@ class agent:
         print(" Spawning vehicle at location : %d, %d, %d"%(car_tf.location.x, car_tf.location.y, car_tf.location.z))
         print(" Vehicle model : %s %s"%(self.vehicle.type_id.split('.')[1], self.vehicle.type_id.split('.')[2]))
 
-    def spawn_imu(self, period=0.1, length=500):
+    def spawn_imu(self, period=0.1, length=500, accel_std_dev = 0, gyro_std_dev = 0):
         if(self.vehicle == None):
             print(" Error : spawn car first")
             return
 
         imu_bp = self.bp_lib.find("sensor.other.imu")
         imu_bp.set_attribute('sensor_tick', '0.1')
+        imu_bp.set_attribute('noise_gyro_stddev_y', str(gyro_std_dev))
+        imu_bp.set_attribute('noise_gyro_stddev_x', str(gyro_std_dev))
+        imu_bp.set_attribute('noise_gyro_stddev_z', str(gyro_std_dev))
+        imu_bp.set_attribute('noise_accel_stddev_y', str(accel_std_dev))
+        imu_bp.set_attribute('noise_accel_stddev_x', str(accel_std_dev))
+        imu_bp.set_attribute('noise_accel_stddev_z', str(accel_std_dev))
         imu_tf = carla.Transform(carla.Location(0,0,0), carla.Rotation(0,0,0))
 
         self.imu = self.world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
@@ -81,13 +87,15 @@ class agent:
     def imu_reset(self):
         self.imu_list = []
 
-    def spawn_gnss(self, period=0.1, length=500):
+    def spawn_gnss(self, period=0.1, length=500, std_dev=0.1):
         if(self.vehicle == None):
             print(" Error : spawn car first")
             return
 
         gnss_bp = self.bp_lib.find("sensor.other.gnss")
         gnss_bp.set_attribute('sensor_tick', '0.1')
+        gnss_bp.set_attribute('noise_lat_stddev', str(std_dev))
+        gnss_bp.set_attribute('noise_lon_stddev', str(std_dev))
         gnss_tf = carla.Transform(carla.Location(0,0,0), carla.Rotation(0,0,0))
 
         map_geo = self.world.get_map().transform_to_geolocation(carla.Location(0,0,0))
