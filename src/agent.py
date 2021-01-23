@@ -39,107 +39,120 @@ class agent:
         self.world  = self.client.get_world()
         self.bp_lib = self.world.get_blueprint_library()
 
+        self.vehicle = None
         self.actor_list = []
 
-    def spawn_vehicle(self):
-        car_bp = np.random.choice(self.bp_lib.filter("vehicle.*.*"))
-        car_tf = np.random.choice(self.world.get_map().get_spawn_points())
+        map_geo = self.world.get_map().transform_to_geolocation(carla.Location(0,0,0))
+        
+        self.geo_centre_lat = deg_to_rad(map_geo.latitude) 
+        self.geo_centre_lon = deg_to_rad(map_geo.longitude)
+        self.geo_centre_alt = map_geo.altitude
 
+
+    # Spawn the vehicle randomly
+    def spawn_vehicle(self, index=None):
+        # Create blueprint and transform
+        car_bp = np.random.choice(self.bp_lib.filter("vehicle.*.*"))
+        print(" Vehicle model : %s %s"%(car_bp.id.split('.')[1], car_bp.id.split('.')[2]))
+        if(index == None):    
+            car_tf = np.random.choice(self.world.get_map().get_spawn_points())
+            print(" Spawning vehicle at location : %d, %d, %d (random generation)"%(car_tf.location.x, car_tf.location.y, car_tf.location.z))
+        else:
+            car_tf = self.world.get_map().get_spawn_points()[index]
+            print(" Spawning vehicle at location : %d, %d, %d (spawn point no. %d)"%(car_tf.location.x, car_tf.location.y, car_tf.location.z, index))
+
+        # Spawn vehicle, append to actor list and set autopilot
         self.vehicle = self.world.spawn_actor(car_bp, car_tf)
+        if(self.vehicle == None):
+            print(" Vehicle could not be spawned")
+            return
         self.actor_list.append(self.vehicle)
         self.vehicle.set_autopilot(True)
 
-        print(" Spawning vehicle at location : %d, %d, %d"%(car_tf.location.x, car_tf.location.y, car_tf.location.z))
-        print(" Vehicle model : %s %s"%(self.vehicle.type_id.split('.')[1], self.vehicle.type_id.split('.')[2]))
-
-    def spawn_imu(self, period=0.1, length=500, accel_std_dev = 0, gyro_std_dev = 0):
+    # Spawn an IMU sensor
+    def spawn_imu(self, callback, period=0.1, accel_std_dev = 0, gyro_std_dev = 0):
+        # Check if the vehicle was spawned
         if(self.vehicle == None):
             print(" Error : spawn car first")
             return
 
+        # Create blueprint and transform
         imu_bp = self.bp_lib.find("sensor.other.imu")
         imu_bp.set_attribute('sensor_tick', '0.1')
-        imu_bp.set_attribute('noise_gyro_stddev_y', str(gyro_std_dev))
-        imu_bp.set_attribute('noise_gyro_stddev_x', str(gyro_std_dev))
-        imu_bp.set_attribute('noise_gyro_stddev_z', str(gyro_std_dev))
+        imu_bp.set_attribute('noise_gyro_stddev_y',  str(gyro_std_dev))
+        imu_bp.set_attribute('noise_gyro_stddev_x',  str(gyro_std_dev))
+        imu_bp.set_attribute('noise_gyro_stddev_z',  str(gyro_std_dev))
         imu_bp.set_attribute('noise_accel_stddev_y', str(accel_std_dev))
         imu_bp.set_attribute('noise_accel_stddev_x', str(accel_std_dev))
         imu_bp.set_attribute('noise_accel_stddev_z', str(accel_std_dev))
         imu_tf = carla.Transform(carla.Location(0,0,0), carla.Rotation(0,0,0))
 
+        # Spawning the sensor and appending to list
         self.imu = self.world.spawn_actor(imu_bp, imu_tf, attach_to=self.vehicle)
         self.actor_list.append(self.imu)
+        # For timing
         self.imu_time = 0
         self.imu_per  = period
-        self.imu_len  = length
-        self.imu_list = []
-        self.imu.listen(self.imu_listen)
+        # Register listen callback
+        self.imu.listen(lambda data : self.imu_listen(data, callback))
 
-    def imu_listen(self, data):
+    # Listener function for IMU sensor
+    def imu_listen(self, data, callback):
         if(data.timestamp - self.imu_time < self.imu_per):
             return
         self.imu_time = data.timestamp
         self.imu_data = data
 
-        if(len(self.imu_list) < self.imu_len):
-            self.imu_list.append(data)
+        callback(data)
 
-    def imu_reset(self):
-        self.imu_list = []
+    # Convert from geographic (lat, lon, alt) in data to x, y and z coordinates
+    def gnss_to_xyz(self, data):
+        
+        lat = deg_to_rad(data.latitude)
+        lon = deg_to_rad(data.longitude)
+        alt = data.altitude 
+        
+        rad_y  = 6.357e6
+        rad_x  = 6.378e6
 
-    def spawn_gnss(self, period=0.1, length=500, std_dev=0.1):
+        x = (lon - self.geo_centre_lon) * np.cos(self.geo_centre_lat) * rad_x
+        y = (self.geo_centre_lat - lat) * rad_y
+        z = alt - self.geo_centre_alt
+
+        return [x, y, z]
+
+    def spawn_gnss(self, callback, period=0.1, std_dev=0.1):
+        # Check if the vehicle was spawned
         if(self.vehicle == None):
             print(" Error : spawn car first")
             return
 
+        # Define the blueprint and transform
         gnss_bp = self.bp_lib.find("sensor.other.gnss")
         gnss_bp.set_attribute('sensor_tick', '0.1')
         gnss_bp.set_attribute('noise_lat_stddev', str(std_dev))
         gnss_bp.set_attribute('noise_lon_stddev', str(std_dev))
         gnss_tf = carla.Transform(carla.Location(0,0,0), carla.Rotation(0,0,0))
-
-        map_geo = self.world.get_map().transform_to_geolocation(carla.Location(0,0,0))
-        self.geo_centre = {'lat': deg_to_rad(map_geo.latitude), 'lon': deg_to_rad(map_geo.longitude), 'alt':map_geo.altitude}
-        self.geo_rad_y  = 6.357e6
-        self.geo_rad_x  = 6.378e6
-
+        
+        # Spawning the sensor and appending to list
         self.gnss = self.world.spawn_actor(gnss_bp, gnss_tf, attach_to=self.vehicle)
         self.actor_list.append(self.gnss)
+        # For timing
         self.gnss_time = 0
         self.gnss_per  = period
-        self.gnss_len  = length
-        self.gnss_list = []
-        self.rpos_list = []
-        self.gnss.listen(self.gnss_listen)
-        
-    def gnss_listen(self, data):
+        # Register listen callback
+        self.gnss.listen(lambda data : self.gnss_listen(data, callback))
+
+    # Listener function for GNSS sensor
+    def gnss_listen(self, data, callback):
         if(data.timestamp - self.gnss_time < self.gnss_per):
             return
         self.gnss_time = data.timestamp
         self.gnss_data = data
 
-        lat = deg_to_rad(data.latitude)
-        lon = deg_to_rad(data.longitude)
-        alt = data.altitude 
+        callback(data)        
         
-        x = (lon - self.geo_centre['lon']) * np.cos(self.geo_centre['lat']) * self.geo_rad_x
-        y = (self.geo_centre['lat'] - lat) * self.geo_rad_y
-        z = alt - self.geo_centre['alt']
-
-        loc = self.vehicle.get_location()
-        
-        self.gnss_pos = [x, y, z]
-        self.real_pos = [loc.x, loc.y, loc.z]
-        self.gnss_err = [self.gnss_pos[i] - self.real_pos[i] for i in range(3)]
-        
-        if(len(self.gnss_list) < self.gnss_len):
-            self.gnss_list.append((self.gnss_pos, data.timestamp))
-            self.rpos_list.append((self.real_pos, data.timestamp))
-
-    def gnss_reset(self):
-        self.gnss_list = []
-        self.rpos_list = []
-        
+    # Destructor
     def __del__(self):
         for a in self.actor_list:
             a.destroy()
