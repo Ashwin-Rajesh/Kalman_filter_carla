@@ -30,7 +30,7 @@ class imu_integrate:
         self.state  = init_state
         self.prev_time   = init_time
 
-        self.trajectory = []
+        self.states = []
 
     # Input : A column vector with [x_accel, y_accel, yaw_vel]
     def update(self, inp, time):
@@ -85,16 +85,12 @@ class imu_integrate:
         elif(self.state[2] < -np.pi):
             self.state[2] = self.state[2] + 2 * np.pi
 
-        # Append to trajectory
-        self.trajectory.append([self.state, time])
+        # Append to states
+        self.states.append([self.state, time])
 
         # Update previous time
         self.prev_time = time
 
     # Return position
     def get_pos(self):
-        return (self.trajectory[len(self.trajectory)-1])
-
-    # Return trajectory
-    def get_traj(self):
-        return self.trajectory
+        return (self.states[len(self.states)-1])
