@@ -33,7 +33,8 @@ class imu_integrate:
 
         self.Q              = np.diag([accel_var, accel_var, yaw_var])
 
-        self.trajectory = []
+        self.states = []
+        self.covars = []
 
     # Input : A column vector with [x_accel, y_accel, yaw_vel]
     def update(self, inp, time):
@@ -100,15 +101,12 @@ class imu_integrate:
         self.covar = A.dot(self.covar.dot(A.T)) + B.dot(self.Q.dot(B.T))
     
         # Append to trajectory
-        self.trajectory.append([self.state, time])
+        self.states.append([self.state, time])
+        self.covars.append([self.covar, time])
 
         # Update previous time
         self.prev_time = time
 
     # Return position
     def get_pos(self):
-        return (self.trajectory[len(self.trajectory)-1])
-
-    # Return trajectory
-    def get_traj(self):
-        return self.trajectory
+        return (self.states[len(self.states)-1])
