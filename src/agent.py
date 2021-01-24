@@ -70,7 +70,7 @@ class agent:
         self.vehicle.set_autopilot(True)
 
     # Spawn an IMU sensor
-    def spawn_imu(self, callback, period=0.1, accel_std_dev = 0, gyro_std_dev = 0):
+    def spawn_imu(self, period=0.1, accel_std_dev = 0, gyro_std_dev = 0):
         # Check if the vehicle was spawned
         if(self.vehicle == None):
             print(" Error : spawn car first")
@@ -93,17 +93,22 @@ class agent:
         # For timing
         self.imu_time = 0
         self.imu_per  = period
-        # Register listen callback
-        self.imu.listen(lambda data : self.imu_listen(data, callback))
+        # Register listen function
+        self.imu_callbacks = []
+        self.imu.listen(self.imu_listen)
 
     # Listener function for IMU sensor
-    def imu_listen(self, data, callback):
+    def imu_listen(self, data):
         if(data.timestamp - self.imu_time < self.imu_per):
             return
         self.imu_time = data.timestamp
         self.imu_data = data
 
-        callback(data)
+        for c in self.imu_callbacks:
+            c(data)
+
+    def imu_reg_callback(self, callback):
+        self.imu_callbacks.append(callback)
 
     # Convert from geographic (lat, lon, alt) in data to x, y and z coordinates
     def gnss_to_xyz(self, data):
