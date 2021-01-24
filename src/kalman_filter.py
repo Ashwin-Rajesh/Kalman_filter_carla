@@ -24,14 +24,15 @@
 
 import numpy as np
 
-class imu_integrate:
+class kalman_filter:
     # State : A column vector with [x_pos, y_pos, yaw, x_vel, y_vel]    
-    def __init__(self, init_state, init_time, accel_var, yaw_var):
+    def __init__(self, init_state, init_time, accel_var, yaw_var, meas_var):
         self.state          = init_state
         self.prev_time      = init_time
         self.covar          = np.diag([1, 1, 1, 1, 1])
 
         self.Q              = np.diag([accel_var, accel_var, yaw_var])
+        self.R              = np.diag([meas_var, meas_var])
 
         self.states = []
         self.covars = []
@@ -101,11 +102,33 @@ class imu_integrate:
         self.covar = A.dot(self.covar.dot(A.T)) + B.dot(self.Q.dot(B.T))
     
         # Append to trajectory
-        self.states.append([self.state, time])
-        self.covars.append([self.covar, time])
+        self.states.append([self.state, time, 0])
+        self.covars.append([self.covar, time, 0])
 
         # Update previous time
         self.prev_time = time
+
+    def measure(self, measurement, time):
+        # How to find expected measurement from state?
+        H = np.asarray([\
+                        [1, 0, 0, 0, 0], \
+                        [0, 1, 0, 0, 0], \
+                        ])
+
+        # Error of measurement from expected measurement
+        V = measurement - H.dot(self.state)
+
+        S = H.dot(self.covar.dot(H.T)) + self.R
+
+        K = self.covar.dot(H.T.dot(np.linalg.inv(S)))
+
+        self.state = self.state + K.dot(V)
+
+        self.covar = self.covar - K.dot(S.dot(K.T))
+
+        # Append to trajectory
+        self.states.append([self.state, time, 1])
+        self.covars.append([self.covar, time, 1])
 
     # Return position
     def get_pos(self):
