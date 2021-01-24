@@ -34,6 +34,7 @@ def deg_to_rad(val):
     return val * np.pi / 180
 
 class agent:
+    # Constructor
     def __init__(self):
         self.client = carla.Client('localhost', 2000)
         self.world  = self.client.get_world()
@@ -107,6 +108,7 @@ class agent:
         for c in self.imu_callbacks:
             c(data)
 
+    # Register a function to be called when IMU data is received
     def imu_reg_callback(self, callback):
         self.imu_callbacks.append(callback)
 
@@ -126,6 +128,7 @@ class agent:
 
         return [x, y, z]
 
+    # Spawn a GNSS sensor
     def spawn_gnss(self, period=0.1, std_dev=0.1):
         # Check if the vehicle was spawned
         if(self.vehicle == None):
@@ -159,6 +162,7 @@ class agent:
         for c in self.gnss_callbacks:
             c(data)
 
+    # Register a function to be called when gnss data is received
     def gnss_reg_callback(self, callback):
         self.gnss_callbacks.append(callback)
         
@@ -168,6 +172,7 @@ class agent:
             a.destroy()
             self.actor_list.remove(a)
 
+    # Destroy all actor
     def destroy_actors(self):
         for a in self.actor_list:
             a.destroy()
