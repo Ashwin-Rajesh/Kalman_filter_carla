@@ -36,6 +36,39 @@ Kalman filter for self driving cars using gnss and imu data. Data was collected 
   - argument : ```data```       : The gnss data to be converted
   - returns  : ```[x, y, z]```  : Standard cartesian coordinates
 
+---
+
+## Kalman filter interface
+
+For controlling and giving inputs
+- At initialization, we give the following details to the constructor:
+  - ```initial_state```
+    - A 5x1 column vector, with the format ```[x_pos, y_pos, yaw_angle, x_vel, y_vel]```
+    - This is considered to be perfect data, i.e with 0 variance.
+  - ```accel_var```
+    - Variance of accelerometer data
+  - ```yaw_var```
+    - Variance of gyroscope yaw angular velocity estimate
+  - ```meas_var```
+    - Variance of measurements (gnss data)
+
+- For the prediction stage, to feed with inputs (x and y acceleration from acceleromter and yaw angular veloicty from gyroscope), pass the following
+  - ```inp```
+    - A 3x1 column vector with the format ```[x_accel, y_accel, yaw_vel]```
+  - ```time```
+    - Current time in seconds
+
+- For the updation stage, to feed with measurements (x, y data from GNSS sensor), pass the following
+  - ```measurement```
+    - A 2x1 column vector with the format ```[x_pos, y_pos]```
+  - ```time```
+    - Current time in seconds
+
+For getting outputs and viewing previous estimations, use the following data members
+- ```state``` object stores state in same format as ```initial_state``` arguement in the constructor. Updated in both updation and measurement stages.
+- ```states``` list stores tuples of state vector ,timestamp, and ```0``` if state was added during updation and ```1``` if state was added during measurement
+- ```covar``` object stores the covariance matrix (5x5)
+- ```covars``` list stores covariance matrices after each udation or measurement, like the ```states``` list
 
 ---
 
