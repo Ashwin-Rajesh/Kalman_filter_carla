@@ -27,9 +27,9 @@ import numpy as np
 class kalman_filter:
     # State : A column vector with [x_pos, y_pos, yaw, x_vel, y_vel]    
     def __init__(self, init_state, init_time, accel_var, yaw_var, meas_var):
-        self.state          = init_state
+        self.state          = np.asarray(init_state).reshape(5,1)
         self.prev_time      = init_time
-        self.covar          = np.diag([1, 1, 1, 1, 1])
+        self.covar          = np.zeros((5,5))
 
         self.Q              = np.diag([accel_var, accel_var, yaw_var])
         self.R              = np.diag([meas_var, meas_var])
@@ -39,6 +39,9 @@ class kalman_filter:
 
     # Input : A column vector with [x_accel, y_accel, yaw_vel]
     def update(self, inp, time):
+        
+        inp = np.asarray(inp).reshape(3,1)
+        
         dt = time - self.prev_time
         
         # Transition matrix :
@@ -81,23 +84,52 @@ class kalman_filter:
         #     [0, 1, 0],  \
         #     ])
         
-        yaw      = self.state[2]
-        accel_xl = inp[0]
-        accel_yl = inp[1]
+        yaw      = self.state[2][0]
+        accel_xl = inp[0][0]
+        accel_yl = inp[1][0]
         accel_xg = accel_xl * np.cos(yaw) - accel_yl * np.sin(yaw)
         accel_yg = accel_xl * np.sin(yaw) + accel_yl * np.cos(yaw)
 
-        inp[0]  = accel_xg
-        inp[1]  = accel_yg
+        dxvel_dyaw = -dt * (inp[0][0] * np.sin(self.state[2][0]) + inp[1][0] * np.cos(self.state[2][0]))
+        dyvel_dyaw =  dt * (inp[0][0] * np.cos(self.state[2][0]) - inp[1][0] * np.sin(self.state[2][0]))
 
+        dxvel_din1 =  dt * np.cos(self.state[2][0])
+        dxvel_din2 = -dt * np.sin(self.state[2][0])
+        dyvel_din1 =  dt * np.sin(self.state[2][0])
+        dyvel_din2 =  dt * np.cos(self.state[2][0])
+
+        g_inp = np.asarray([accel_xg, accel_yg, inp[2][0]]).reshape(3,1)
         # State updation with input
-        self.state = A.dot(self.state) + B.dot(inp)
+        self.state = A.dot(self.state) + B.dot(g_inp)
+        #self.state = np.asarray([x_new, y_new, yaw_new, xvel_new, yvel_new]).reshape(5,1) 
+        
+        if(self.state[2][0] > np.pi):
+            self.state[2][0] = self.state[2][0] - 2 * np.pi
+        elif(self.state[2][0] < -np.pi):
+            self.state[2][0] = self.state[2][0] + 2 * np.pi
 
-        if(self.state[2] > np.pi):
-            self.state[2] = self.state[2] - 2 * np.pi
-        elif(self.state[2] < -np.pi):
-            self.state[2] = self.state[2] + 2 * np.pi
+        # x_new    = self.state[0][0] + dt * self.state[3][0]
+        # y_new    = self.state[1][0] + dt * self.state[4][0]
+        # yaw_new  = self.state[2][0] + dt * inp[2][0]
+        # xvel_new = self.state[3][0] + dt * (inp[0][0] * np.cos(self.state[2][0]) - inp[1][0] * np.sin(self.state[2][0]))
+        # yvel_new = self.state[4][0] + dt * (inp[0][0] * np.sin(self.state[2][0]) + inp[1][0] * np.cos(self.state[2][0]))
+ 
+        A = np.asarray([\
+            [1, 0, 0,           dt,0], \
+            [0, 1, 0,           0, dt],\
+            [0, 0, 1,           0, 0], \
+            [0, 0, dxvel_dyaw,  1, 0], \
+            [0, 0, dyvel_dyaw,  0, 1]  \
+            ])
 
+        B = np.asarray([\
+            [0,             0,          0], \
+            [0,             0,          0], \
+            [0,             0,          dt],\
+            [dxvel_din1,    dxvel_din2, 0], \
+            [dyvel_din1,    dyvel_din2, 0], \
+            ])
+        
         # Covariance update
         self.covar = A.dot(self.covar.dot(A.T)) + B.dot(self.Q.dot(B.T))
     
@@ -115,6 +147,8 @@ class kalman_filter:
                         [0, 1, 0, 0, 0], \
                         ])
 
+        measurement = np.asarray(measurement).reshape(2,1)
+
         # Error of measurement from expected measurement
         V = measurement - H.dot(self.state)
 
@@ -125,7 +159,7 @@ class kalman_filter:
         self.state = self.state + K.dot(V)
 
         self.covar = self.covar - K.dot(S.dot(K.T))
-
+        
         # Append to trajectory
         self.states.append([self.state, time, 1])
         self.covars.append([self.covar, time, 1])
