@@ -126,7 +126,7 @@ class agent:
 
         return [x, y, z]
 
-    def spawn_gnss(self, callback, period=0.1, std_dev=0.1):
+    def spawn_gnss(self, period=0.1, std_dev=0.1):
         # Check if the vehicle was spawned
         if(self.vehicle == None):
             print(" Error : spawn car first")
@@ -146,19 +146,29 @@ class agent:
         self.gnss_time = 0
         self.gnss_per  = period
         # Register listen callback
-        self.gnss.listen(lambda data : self.gnss_listen(data, callback))
+        self.gnss_callbacks = []
+        self.gnss.listen(self.gnss_listen)
 
     # Listener function for GNSS sensor
-    def gnss_listen(self, data, callback):
+    def gnss_listen(self, data):
         if(data.timestamp - self.gnss_time < self.gnss_per):
             return
         self.gnss_time = data.timestamp
         self.gnss_data = data
 
-        callback(data)        
+        for c in self.gnss_callbacks:
+            c(data)
+
+    def gnss_reg_callback(self, callback):
+        self.gnss_callbacks.append(callback)
         
     # Destructor
     def __del__(self):
+        for a in self.actor_list:
+            a.destroy()
+            self.actor_list.remove(a)
+
+    def destroy_actors(self):
         for a in self.actor_list:
             a.destroy()
             self.actor_list.remove(a)
